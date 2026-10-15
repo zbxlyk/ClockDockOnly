@@ -66,8 +66,9 @@ static UIView *HGDFindMusicCover(UIView *root) {
     __block UIView *result = nil;
     __block CGFloat bestScore = 0;
 
-    __block void (^walk)(UIView *);
-    walk = ^(UIView *v) {
+    __block __weak void (^weakWalk)(UIView *);
+    void (^walk)(UIView *);
+    weakWalk = walk = ^(UIView *v) {
         if (!v) return;
         CGRect f = [v convertRect:v.bounds toView:root];
         if (f.origin.y > screen.height * 0.5 &&
@@ -79,9 +80,9 @@ static UIView *HGDFindMusicCover(UIView *root) {
                     if ([s isKindOfClass:[UIImageView class]]) { hasImage = YES; break; }
             if (hasImage && f.size.width > bestScore) { bestScore = f.size.width; result = v; }
         }
-        for (UIView *s in v.subviews) walk(s);
+        for (UIView *s in v.subviews) if (weakWalk) weakWalk(s);
     };
-    walk(root);
+    if (weakWalk) weakWalk(root);
     return result;
 }
 
@@ -101,8 +102,9 @@ static UIView *HGDFindAuthorAvatar(UIView *root) {
     __block UIView *result = nil;
     __block CGFloat bestScore = 0;
 
-    __block void (^walk)(UIView *);
-    walk = ^(UIView *v) {
+    __block __weak void (^weakWalk)(UIView *);
+    void (^walk)(UIView *);
+    weakWalk = walk = ^(UIView *v) {
         if (!v) return;
         CGRect f = [v convertRect:v.bounds toView:root];
         // 上 40% 区域、36~90pt 的近似方形
@@ -120,9 +122,9 @@ static UIView *HGDFindAuthorAvatar(UIView *root) {
                 if (score > bestScore) { bestScore = score; result = v; }
             }
         }
-        for (UIView *s in v.subviews) walk(s);
+        for (UIView *s in v.subviews) if (weakWalk) weakWalk(s);
     };
-    walk(root);
+    if (weakWalk) weakWalk(root);
     return result;
 }
 
@@ -130,13 +132,14 @@ static UIView *HGDFindAuthorAvatar(UIView *root) {
 static UIButton *HGDFindButtonInColumn(UIView *column, NSInteger index) {
     if (!column) return nil;
     NSMutableArray<UIView *> *btns = [NSMutableArray array];
-    __block void (^walk)(UIView *);
-    walk = ^(UIView *v) {
+    __block __weak void (^weakWalk)(UIView *);
+    void (^walk)(UIView *);
+    weakWalk = walk = ^(UIView *v) {
         if (!v) return;
         if ([v isKindOfClass:[UIControl class]]) [btns addObject:v];
-        for (UIView *s in v.subviews) walk(s);
+        for (UIView *s in v.subviews) if (weakWalk) weakWalk(s);
     };
-    walk(column);
+    if (weakWalk) weakWalk(column);
     [btns sortUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
         return a.frame.origin.y < b.frame.origin.y ? NSOrderedAscending : NSOrderedDescending;
     }];
@@ -151,8 +154,9 @@ static NSString *HGDFindCountTextNear(UIView *root, UIView *anchor) {
     __block NSString *best = nil;
     __block CGFloat bestDist = 90.0;   // 最多在 90pt 内找
 
-    __block void (^walk)(UIView *);
-    walk = ^(UIView *v) {
+    __block __weak void (^weakWalk)(UIView *);
+    void (^walk)(UIView *);
+    weakWalk = walk = ^(UIView *v) {
         if (!v) return;
         if ([v isKindOfClass:[UILabel class]]) {
             UILabel *lb = (UILabel *)v;
@@ -172,9 +176,9 @@ static NSString *HGDFindCountTextNear(UIView *root, UIView *anchor) {
                 }
             }
         }
-        for (UIView *s in v.subviews) walk(s);
+        for (UIView *s in v.subviews) if (weakWalk) weakWalk(s);
     };
-    walk(root);
+    if (weakWalk) weakWalk(root);
     return best;
 }
 
