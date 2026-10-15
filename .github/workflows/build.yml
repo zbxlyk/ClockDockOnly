@@ -18,32 +18,45 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git make fakeroot curl ca-certificates \
-            libssl-dev zlib1g-dev libplist-dev || true
+            xz-utils libssl-dev zlib1g-dev libplist-dev perl rsync || true
 
-      # ---------- Theos + iOS SDK（缓存）----------
+      # ---------- Theos + 工具链 + SDK（缓存）----------
       - name: 缓存 Theos
         id: cache-theos
         uses: actions/cache@v4
         with:
           path: theos
-          key: theos-linux-v2
+          key: theos-linux-v3
 
-      - name: 安装 Theos + iOS SDK
+      - name: 安装 Theos + 工具链 + iOS SDK
         if: steps.cache-theos.outputs.cache-hit != 'true'
         run: |
           set -e
+          # 1) Theos 主仓库
           git clone --recursive --depth 1 https://github.com/theos/theos.git theos
-          curl -L -o /tmp/sdks.tar.gz \
+
+          # 2) Linux 交叉编译工具链（关键！主仓库不含）
+          mkdir -p theos/toolchain
+          curl -L --retry 3 -o /tmp/tc.tar.xz \
+            https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz
+          tar -xJf /tmp/tc.tar.xz -C theos/toolchain/
+          echo "--- toolchain ---"; ls theos/toolchain/ || true
+          ls theos/toolchain/linux/iphone/bin/clang && echo "clang OK"
+
+          # 3) iOS SDK
+          curl -L --retry 3 -o /tmp/sdks.tar.gz \
             https://github.com/theos/sdks/archive/refs/heads/master.tar.gz
           tar xzf /tmp/sdks.tar.gz -C /tmp
           mkdir -p theos/sdks
           cp -R /tmp/sdks-master/*.sdk theos/sdks/
-          echo "--- SDKS ---"; ls theos/sdks
+          echo "--- sdks ---"; ls theos/sdks
 
-      - name: 校验 SDK
+      - name: 校验环境
         run: |
-          ls theos/sdks | head
-          ls theos/sdks/iPhoneOS16.5.sdk/SDKSettings.plist && echo "SDK OK"
+          set -e
+          ls theos/toolchain/linux/iphone/bin/clang
+          ls theos/sdks/iPhoneOS16.5.sdk/SDKSettings.plist
+          echo "环境就绪"
 
       # ---------- 构建 ----------
       - name: 编译
@@ -51,11 +64,11 @@ jobs:
           THEOS: ${{ github.workspace }}/theos
         run: |
           set -e
+          mkdir -p out
+
           # rootful
           make clean 2>/dev/null || true
           make package FINALPACKAGE=1 PACKAGE_VERSION=1.0.0
-          # 把产物另存，避免被下一次 clean
-          mkdir -p out
           cp packages/*.deb out/ 2>/dev/null || true
 
           # rootless
