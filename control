@@ -1,0 +1,9 @@
+Package: com.hgd.clockdockonly
+Name: ClockDockOnly
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: 把抖音播放页右侧竖列改造成时钟表盘（头像居中，互动按钮沿圆弧排列）
+Maintainer: hgd
+Author: hgd
+Section: Tweaks
+Depends: mobilesubstrate

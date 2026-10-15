@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClockDockOnly v3 效果预览</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#07070a;color:#e8e8f0;font:14px -apple-system,sans-serif;
+       display:flex;flex-direction:column;align-items:center;padding:18px 10px;gap:14px}
+  h1{font-size:16px;font-weight:600;margin:0}
+  .sub{color:#7a7a8a;font-size:12px;margin-top:-6px}
+
+  .phone{position:relative;width:340px;height:630px;background:#000;border-radius:42px;
+         border:2px solid #202028;overflow:hidden;box-shadow:0 0 60px #000c}
+  .video{position:absolute;inset:0;background:#000}
+  .stars{position:absolute;inset:0;pointer-events:none}
+
+  /* 互动项 */
+  .item{position:absolute;transform:translate(-50%,-50%);display:flex;
+        flex-direction:column;align-items:center}
+  .circle{width:var(--d);height:var(--d);border-radius:50%;
+          background:radial-gradient(circle at 50% 38%,#3a3a3a,#212121 70%,#191919);
+          border:1px solid rgba(255,255,255,.10);
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 2px 8px rgba(0,0,0,.5)}
+  .circle svg{width:46%;height:46%;stroke:#f2f2f2;fill:none;
+              stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .num{margin-top:6px;font-size:15px;font-weight:600;color:#f7f7f7;
+       text-shadow:0 1px 3px rgba(0,0,0,.6)}
+
+  /* 头像 & 封面 */
+  .av,.cv{position:absolute;transform:translate(-50%,-50%);border-radius:50%;
+          background:linear-gradient(140deg,#7f5cff,#ff7ba8);overflow:visible}
+  .av{border:2px solid rgba(255,255,255,.92);box-shadow:0 0 14px rgba(0,0,0,.6)}
+  .cv{border:2px solid rgba(255,255,255,.9)}
+  .cv::before{content:'';position:absolute;inset:-9%;border-radius:50%;
+              border:5px solid rgba(140,140,150,.85)}
+  .cv::after{content:'';position:absolute;inset:1%;border-radius:50%;
+             border:1px solid rgba(255,255,255,.35)}
+
+  .follow{position:absolute;transform:translate(-50%,-50%);border-radius:50%;
+          background:#e81a52;border:2.5px solid #000;
+          display:flex;align-items:center;justify-content:center;
+          color:#fff;font-weight:600;font-size:17px}
+
+  .tools{display:flex;gap:8px}
+  .tools button{background:#191920;color:#cfcfe0;border:1px solid #2c2c38;
+                border-radius:8px;padding:6px 12px;font-size:12px}
+  .tools button.on{background:#2a2140;border-color:#7a5cff;color:#fff}
+  .hint{color:#6f6f80;font-size:11px;text-align:center;max-width:340px;line-height:1.7}
+  .hint code{color:#a99cd8}
+</style>
+</head>
+<body>
+  <h1>ClockDockOnly v3 · 星尘打散布局</h1>
+  <div class="sub">深色圆底按钮 · 白色描边图标 · 数字在下方</div>
+
+  <div class="phone">
+    <div class="video"></div>
+    <svg class="stars" id="stars"></svg>
+  </div>
+
+  <div class="tools">
+    <button id="tStar" class="on">星尘</button>
+    <button id="tCount" class="on">数字</button>
+  </div>
+  <div class="hint">
+    坐标与 <code>HGDClockDockPanel.m</code> 的 <code>kPosAction[]</code> 一致（取自参考图测量）。
+    圆底 = 屏幕宽 ×0.283，头像 ×0.320，封面 ×0.382，加号 ×0.160。
+  </div>
+
+<script>
+const W = 340;
+const phone = document.querySelector('.phone');
+
+// 归一化坐标（与 ObjC 代码一致）
+const POS_ACTION = [[0.132,0.473],[0.321,0.260],[0.342,0.695],[0.740,0.777]];
+const AVATAR = [0.778,0.211], COVER = [0.783,0.478], FOLLOW = [0.750,0.274];
+const D_ACTION=0.283, D_AVATAR=0.320, D_COVER=0.382, D_FOLLOW=0.160;
+
+const ICONS = {
+  bubble:'<path d="M3 4h18v12H8l-5 4V4z"/>',
+  heart:'<path d="M12 20s-7-4.6-7-9.3A4 4 0 0 1 12 7a4 4 0 0 1 7 3.7C19 15.4 12 20 12 20z"/>',
+  star:'<path d="M12 3l2.6 5.6 6.1.7-4.5 4.1 1.2 6L12 16.8 6.6 19.4l1.2-6L3.3 9.3l6.1-.7L12 3z"/>',
+  paperplane:'<path d="M22 3L2 10.5l6.5 2.5L11 20l3-5.5L22 3z"/><path d="M8.5 13L22 3"/>'
+};
+const NAMES=['bubble','heart','star','paperplane'];
+const COUNTS=['43','1030','104','113'];
+
+let showStar=true, showCount=true;
+const H = 630;
+
+function svgIcon(k){return `<svg viewBox="0 0 24 24">${ICONS[k]}</svg>`;}
+
+function render(){
+  // 清空动态元素
+  phone.querySelectorAll('.item,.av,.cv,.follow').forEach(e=>e.remove());
+
+  // 星尘
+  const st=document.getElementById('stars');
+  st.innerHTML='';
+  if(showStar){
+    let dots='';
+    for(let i=0;i<70;i++){
+      const x=Math.random()*340, y=Math.random()*H;
+      const r=(Math.random()*1.4+0.4).toFixed(2);
+      const o=(Math.random()*0.6+0.3).toFixed(2);
+      dots+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="#fff" opacity="${o}"/>`;
+    }
+    st.innerHTML=dots;
+  }
+
+  const dA = W*D_ACTION;
+  // 互动项
+  POS_ACTION.forEach((p,i)=>{
+    const el=document.createElement('div');
+    el.className='item';
+    el.style.left=(W*p[0])+'px';
+    el.style.top=(H*p[1])+'px';
+    el.innerHTML=`<div class="circle" style="--d:${dA}px">${svgIcon(NAMES[i])}</div>`+
+                 (showCount?`<div class="num">${COUNTS[i]}</div>`:'');
+    phone.appendChild(el);
+  });
+
+  // 头像
+  const av=document.createElement('div');
+  av.className='av';
+  av.style.width=(W*D_AVATAR)+'px'; av.style.height=(W*D_AVATAR)+'px';
+  av.style.left=(W*AVATAR[0])+'px'; av.style.top=(H*AVATAR[1])+'px';
+  phone.appendChild(av);
+
+  // 封面（双圈）
+  const cv=document.createElement('div');
+  cv.className='cv';
+  cv.style.width=(W*D_COVER)+'px'; cv.style.height=(W*D_COVER)+'px';
+  cv.style.left=(W*COVER[0])+'px'; cv.style.top=(H*COVER[1])+'px';
+  cv.style.background='linear-gradient(140deg,#8a5cff,#ff6fa5 60%,#3ad6e0)';
+  phone.appendChild(cv);
+
+  // 关注加号
+  const fo=document.createElement('div');
+  fo.className='follow';
+  const fd=W*D_FOLLOW;
+  fo.style.width=fd+'px'; fo.style.height=fd+'px';
+  fo.style.left=(W*FOLLOW[0])+'px'; fo.style.top=(H*FOLLOW[1])+'px';
+  fo.textContent='+';
+  phone.appendChild(fo);
+}
+
+document.getElementById('tStar').onclick=e=>{showStar=!showStar;e.target.classList.toggle('on');render();};
+document.getElementById('tCount').onclick=e=>{showCount=!showCount;e.target.classList.toggle('on');render();};
+render();
+</script>
+</body>
+</html>
