@@ -44,30 +44,34 @@ jobs:
           cp -R /tmp/sdks-master/*.sdk theos/sdks/
           ls theos/sdks
 
-      # ---------- 只编译，不打包 ----------
+      # ---------- 编译（允许 stage/package 步骤失败，只要 dylib 编出来）----------
       - name: 编译 dylib
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
-          set -e
           make clean 2>/dev/null || true
-          # 只编 dylib，跳过 stage/package（不生成 deb）
-          make ClockDockOnly
-          echo "=== 产物 ==="
-          find .theos -name "*.dylib" -exec ls -la {} \;
+          # FINALPACKAGE=1 → release 构建（非 debug），会生成 .theos/obj/<arch>/*.dylib
+          # 即使后面的打包阶段失败，dylib 也已经生成
+          make package FINALPACKAGE=1 PACKAGE_VERSION=1.0.0 || echo "打包步骤失败，但继续收集 dylib"
+          echo "=== 找 dylib ==="
+          find .theos -name "*.dylib" -exec ls -la {} \; || true
 
       - name: 收集产物
         run: |
           set -e
           mkdir -p out
-          # 把 dylib 和 plist 一起收集
           find .theos -name "ClockDockOnly.dylib" -exec cp {} out/ \;
-          cp ClockDockOnly.plist out/ 2>/dev/null || cp layout/Library/MobileSubstrate/DynamicLibraries/ClockDockOnly.plist out/
+          ls -la out/
+          if [ ! -f out/ClockDockOnly.dylib ]; then
+            echo "❌ 没找到 dylib"; exit 1
+          fi
+          # 顺便打包成 deb（如果生成了）
+          cp packages/*.deb out/ 2>/dev/null || true
           ls -la out/
 
-      - name: 上传 dylib
+      - name: 上传
         uses: actions/upload-artifact@v4
         with:
-          name: ClockDockOnly-dylib
+          name: ClockDockOnly-build
           path: out/*
           if-no-files-found: error
