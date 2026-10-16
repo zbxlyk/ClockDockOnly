@@ -1,4 +1,4 @@
-name: Build ClockDockOnly
+name: Build ClockDockOnly dylib
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build rootful + rootless deb
+    name: Build dylib (arm64 + arm64e)
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +20,6 @@ jobs:
           sudo apt-get install -y git make fakeroot curl ca-certificates \
             xz-utils libssl-dev zlib1g-dev libplist-dev perl rsync || true
 
-      # ---------- Theos + 工具链 + SDK（缓存）----------
       - name: 缓存 Theos
         id: cache-theos
         uses: actions/cache@v4
@@ -32,64 +31,43 @@ jobs:
         if: steps.cache-theos.outputs.cache-hit != 'true'
         run: |
           set -e
-          # 1) Theos 主仓库
           git clone --recursive --depth 1 https://github.com/theos/theos.git theos
-
-          # 2) Linux 交叉编译工具链（关键！主仓库不含）
           mkdir -p theos/toolchain
           curl -L --retry 3 -o /tmp/tc.tar.xz \
             https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz
           tar -xJf /tmp/tc.tar.xz -C theos/toolchain/
-          echo "--- toolchain ---"; ls theos/toolchain/ || true
           ls theos/toolchain/linux/iphone/bin/clang && echo "clang OK"
-
-          # 3) iOS SDK
           curl -L --retry 3 -o /tmp/sdks.tar.gz \
             https://github.com/theos/sdks/archive/refs/heads/master.tar.gz
           tar xzf /tmp/sdks.tar.gz -C /tmp
           mkdir -p theos/sdks
           cp -R /tmp/sdks-master/*.sdk theos/sdks/
-          echo "--- sdks ---"; ls theos/sdks
+          ls theos/sdks
 
-      - name: 校验环境
-        run: |
-          set -e
-          ls theos/toolchain/linux/iphone/bin/clang
-          ls theos/sdks/iPhoneOS16.5.sdk/SDKSettings.plist
-          echo "环境就绪"
-
-      # ---------- 构建 ----------
-      - name: 编译
+      # ---------- 只编译，不打包 ----------
+      - name: 编译 dylib
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
           set -e
+          make clean 2>/dev/null || true
+          # 只编 dylib，跳过 stage/package（不生成 deb）
+          make ClockDockOnly
+          echo "=== 产物 ==="
+          find .theos -name "*.dylib" -exec ls -la {} \;
+
+      - name: 收集产物
+        run: |
+          set -e
           mkdir -p out
-
-          # rootful
-          make clean 2>/dev/null || true
-          make package FINALPACKAGE=1 PACKAGE_VERSION=1.0.0
-          cp packages/*.deb out/ 2>/dev/null || true
-
-          # rootless（Theos 标准方式）
-          make clean 2>/dev/null || true
-          make package FINALPACKAGE=1 PACKAGE_VERSION=1.0.0 THEOS_PACKAGE_SCHEME=rootless
-          cp packages/*.deb out/ 2>/dev/null || true
-
-          echo "--- 产物 ---"; ls -la out/
-
-      - name: 上传 deb
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClockDockOnly-deb
-          path: out/*.deb
-          if-no-files-found: error
+          # 把 dylib 和 plist 一起收集
+          find .theos -name "ClockDockOnly.dylib" -exec cp {} out/ \;
+          cp ClockDockOnly.plist out/ 2>/dev/null || cp layout/Library/MobileSubstrate/DynamicLibraries/ClockDockOnly.plist out/
+          ls -la out/
 
       - name: 上传 dylib
         uses: actions/upload-artifact@v4
         with:
           name: ClockDockOnly-dylib
-          path: |
-            .theos/obj/**/*.dylib
-            .theos/obj/*.dylib
-          if-no-files-found: warn
+          path: out/*
+          if-no-files-found: error
